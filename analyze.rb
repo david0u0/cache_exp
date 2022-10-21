@@ -20,7 +20,7 @@ def stastistic(cost)
   end
   normal_avg = 1.0 * normal_sum / normal_cnt
 
-  [cnt, normal_cnt, normal_avg, std_dev]
+  [cnt, normal_cnt, avg, normal_avg, std_dev]
 end
 
 class Line
@@ -42,8 +42,8 @@ class Line
     if @cost.length == 0
       @msg
     else
-      cnt, normal_cnt, avg, std_dev = stastistic(@cost)
-      "#{@msg}cost = #{avg} (count = #{cnt}, normal count = #{normal_cnt}, std dev = #{std_dev})"
+      cnt, normal_cnt, avg, normal_avg, std_dev = stastistic(@cost)
+      "#{@msg}normal avg cost = %.2f (count = %d, normal count = %d, avg = %.2f, std dev = %.2f)" % [normal_avg, cnt, normal_cnt, avg, std_dev]
     end
   end
 end
@@ -51,7 +51,7 @@ end
 lines = []
 `ls *.log`.split do |log|
   i = 0
-  `cat #{log}`.lines do |l|
+  `cat  #{log}`.lines do |l|
     if lines.length <= i
       lines.push(Line.new)
     end

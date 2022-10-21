@@ -1,9 +1,13 @@
 set -exu
 
+if [ $1 == "baseline" ]; then
+    DFLAG="-D BASELINE"
+fi
+
 OUT=output/$1
 echo output to $OUT
 
-g++ main.cpp -O3 -std=c++17 -pthread
+g++ main.cpp -O3 $DFLAG -std=c++17 -pthread
 
 mkdir -p output
 mkdir -p $OUT

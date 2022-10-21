@@ -19,7 +19,9 @@ using namespace chrono;
 using Value = string;
 
 Value get_value(int key) {
+#ifndef BASELINE
     usleep(1);
+#endif
     /* return key; */
     string s = to_string(key + 10000);
     return s + s + s;
@@ -183,6 +185,7 @@ void exp_access_diff_data_multi_times(const char* name) {
 
 int main(int argc, char *argv[]) {
     srand(time(NULL));
+
     exp_access_same_data_multi_times<MainCacheRWLock>("rw same");
     exp_access_same_data_multi_times<MainCacheWithL2>("l2 same");
     exp_access_same_data_multi_times<MainCacheSingleLock>("single same");
