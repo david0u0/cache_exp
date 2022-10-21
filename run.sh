@@ -1,5 +1,6 @@
 set -exu
 
+DFLAG=""
 if [ $1 == "baseline" ]; then
     DFLAG="-D BASELINE"
 fi

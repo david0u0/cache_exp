@@ -145,6 +145,14 @@ void batch_access(T& l2_cache, int from, int to, int *cost) {
     *cost = end.count() - start.count();
 }
 
+void reorder(int* a, int* b) {
+    if (*a > *b) {
+        int tmp = *a;
+        *a = *b;
+        *b = tmp;
+    }
+}
+
 template <class T>
 void multi_thread_access(T &cache1, T &cache2, const char* name, int from1, int to1, int from2, int to2) {
     cout << "  ===start " << name << " exp===" << endl;
@@ -153,6 +161,7 @@ void multi_thread_access(T &cache1, T &cache2, const char* name, int from1, int 
     thread t2([&]() { batch_access(cache2, from2, to2, &cost2); });
     t1.join();
     t2.join();
+    reorder(&cost1, &cost2);
     cout << "  thread #1 ends, cost=" << cost1 << endl;
     cout << "  thread #2 ends, cost=" << cost2 << endl;
     cout << "  ===end " << name << " exp===" << endl << endl;
