@@ -178,14 +178,14 @@ void reorder(int* a, int* b) {
 }
 
 template <class T>
-void multi_thread_access(T &cache1, T &cache2, const char* name, int from1, int to1, int from2, int to2) {
-    cout << "  ===start " << name << " exp===" << endl;
+void multi_thread_access(T &cache1, T &cache2, const string& name, int from1, int to1, int from2, int to2) {
     int cost1, cost2;
     thread t1([&]() { batch_access(cache1, from1, to1, &cost1); });
     thread t2([&]() { batch_access(cache2, from2, to2, &cost2); });
     t1.join();
     t2.join();
     reorder(&cost1, &cost2);
+    cout << "  ===start " << name << " exp===" << endl;
     cout << "  thread #1 ends, cost=" << cost1 << endl;
     cout << "  thread #2 ends, cost=" << cost2 << endl;
     cout << "  ===end " << name << " exp===" << endl << endl;
@@ -195,40 +195,50 @@ constexpr int SIZE = 10000;
 constexpr int REPEAT = 3;
 
 template <class T>
-void access_multi_times(const char* name, int from1, int to1, int from2, int to2, int repeat) {
+void access_multi_times(const string& name, int from1, int from2, int repeat) {
     T cache;
     auto cache1 = cache.get_l2();
     auto cache2 = cache.get_l2();
     cout << "=======start " << name << " multi times exp=======" << endl;
     for (int i = 0; i < repeat; i++) {
-        multi_thread_access(cache1, cache2, name, from1, to1, from2, to2);
+        int from2_offset = from2 * (i+1);
+        multi_thread_access(cache1, cache2, name, from1, from1 + SIZE, from2_offset, from2_offset + SIZE);
     }
     cout << endl;
 }
 
 template <class T>
-void exp_access_same_data_multi_times(const char* name) {
-    access_multi_times<T>(name, 0, SIZE, 0, SIZE, REPEAT);
+void exp_access_same_data_multi_times(const string& name) {
+    access_multi_times<T>(name, 0, 0, REPEAT);
 }
 
 template <class T>
-void exp_access_diff_data_multi_times(const char* name) {
-    access_multi_times<T>(name, 0, SIZE, SIZE, SIZE * 2, REPEAT);
+void exp_access_diff_data_multi_times(const string& name) {
+    access_multi_times<T>(name, 0, SIZE, REPEAT);
 }
 
 int main(int argc, char *argv[]) {
-    srand(time(NULL));
-
-    exp_access_same_data_multi_times<MainCacheRWLock>("rw same");
-    exp_access_same_data_multi_times<MainCacheSharded>("sharded same");
-    exp_access_same_data_multi_times<MainCacheWithL2<MainCacheRWLock>>("l2 same");
-    exp_access_same_data_multi_times<MainCacheWithL2<MainCacheSharded>>("l2 same sharded");
-    exp_access_same_data_multi_times<MainCacheSingleLock>("single same");
-
-    exp_access_diff_data_multi_times<MainCacheRWLock>("rw diff");
-    exp_access_diff_data_multi_times<MainCacheSharded>("sharded diff");
-    exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheRWLock>>("l2 diff");
-    exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheSharded>>("l2 diff sharded");
-    exp_access_diff_data_multi_times<MainCacheSingleLock>("single diff");
+    string arg = argv[1];
+    if (arg == "rw same") {
+        exp_access_same_data_multi_times<MainCacheRWLock>(arg);
+    } else if (arg == "sharded same") {
+        exp_access_same_data_multi_times<MainCacheSharded>(arg);
+    } else if (arg == "l2 same") {
+        exp_access_same_data_multi_times<MainCacheWithL2<MainCacheRWLock>>(arg);
+    } else if (arg == "l2 sharded same") {
+        exp_access_same_data_multi_times<MainCacheWithL2<MainCacheSharded>>(arg);
+    } else if (arg == "single same") {
+        exp_access_same_data_multi_times<MainCacheSingleLock>(arg);
+    } else if (arg == "rw diff") {
+        exp_access_diff_data_multi_times<MainCacheRWLock>(arg);
+    } else if (arg == "sharded diff") {
+        exp_access_diff_data_multi_times<MainCacheSharded>(arg);
+    } else if (arg == "l2 diff") {
+        exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheRWLock>>(arg);
+    } else if (arg == "l2 sharded diff") {
+        exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheSharded>>(arg);
+    } else if (arg == "single diff") {
+        exp_access_diff_data_multi_times<MainCacheSingleLock>(arg);
+    }
 }
 

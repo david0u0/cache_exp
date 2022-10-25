@@ -11,11 +11,23 @@ echo output to $OUT
 g++ main.cpp -O3 $DFLAG -std=c++17 -pthread
 
 mkdir -p output
+rm $OUT -rf
 mkdir -p $OUT
-for i in {1..50}
+for i in {1..200}
 do
     echo running $i
-    ./a.out > $OUT/$i.log
+    LOG=$OUT/$i.log
+    ./a.out "rw same" >> $LOG
+    ./a.out "sharded same" >> $LOG
+    ./a.out "l2 same" >> $LOG
+    ./a.out "l2 sharded same" >> $LOG
+    ./a.out "single same" >> $LOG
+
+    ./a.out "rw diff" >> $LOG
+    ./a.out "sharded diff" >> $LOG
+    ./a.out "l2 diff" >> $LOG
+    ./a.out "l2 sharded diff" >> $LOG
+    ./a.out "single diff" >> $LOG
 done
 
 cd $OUT
