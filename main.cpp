@@ -17,6 +17,7 @@ using namespace std;
 using namespace chrono;
 
 using Value = string;
+constexpr int SHARD = 16;
 
 Value get_value(int key) {
 #ifndef BASELINE
@@ -27,12 +28,12 @@ Value get_value(int key) {
     return s + s + s;
 }
 
-template <class T>
+template <class MC>
 class DummyL2 {
     private:
-        T &t;
+        MC &t;
     public:
-        DummyL2(T& tt): t(tt) {}
+        DummyL2(MC& tt): t(tt) {}
         void lock() {
             t.lock();
         }
@@ -63,14 +64,35 @@ class MainCacheRWLock {
                     return it->second;
                 }
             }
+            auto v = get_value(key); // may be called multi times?
             unique_lock<shared_mutex> wlock(slock);
-            auto p = map.insert(make_pair(key, get_value(key)));
+            auto p = map.insert(make_pair(key, move(v)));
             return p.first->second;
         }
 
         DummyL2<MainCacheRWLock> get_l2() {
             return DummyL2(*this);
         }
+};
+
+class MainCacheSharded {
+    private:
+        MainCacheRWLock shard[SHARD];
+    public:
+        MainCacheSharded() {}
+
+        void lock() {}
+        void unlock() {}
+
+        Value &read(int key) {
+            int slot = key % SHARD;
+            return shard[slot].read(key);
+        }
+
+        DummyL2<MainCacheSharded> get_l2() {
+            return DummyL2(*this);
+        }
+
 };
 
 class MainCacheSingleLock {
@@ -101,14 +123,15 @@ class MainCacheSingleLock {
         }
 };
 
+template <class MC>
 class L2Cache {
     private:
-        MainCacheRWLock &main_cache;
+        MC &main_cache;
         unordered_map<int, Value> map;
     public:
         void lock() { }
         void unlock() { }
-        L2Cache(MainCacheRWLock& c): main_cache(c) {}
+        L2Cache(MC& c): main_cache(c) {}
 
         Value &read(int key) {
             auto it = map.find(key);
@@ -121,13 +144,14 @@ class L2Cache {
         }
 };
 
+template <class MC>
 class MainCacheWithL2 {
     private:
-        MainCacheRWLock main_cache;
+        MC main_cache;
     public:
         MainCacheWithL2() {}
-        L2Cache get_l2() {
-            return L2Cache{main_cache};
+        L2Cache<MC> get_l2() {
+            return L2Cache<MC>{main_cache};
         }
 };
 
@@ -196,11 +220,15 @@ int main(int argc, char *argv[]) {
     srand(time(NULL));
 
     exp_access_same_data_multi_times<MainCacheRWLock>("rw same");
-    exp_access_same_data_multi_times<MainCacheWithL2>("l2 same");
+    exp_access_same_data_multi_times<MainCacheSharded>("sharded same");
+    exp_access_same_data_multi_times<MainCacheWithL2<MainCacheRWLock>>("l2 same");
+    exp_access_same_data_multi_times<MainCacheWithL2<MainCacheSharded>>("l2 same sharded");
     exp_access_same_data_multi_times<MainCacheSingleLock>("single same");
 
     exp_access_diff_data_multi_times<MainCacheRWLock>("rw diff");
-    exp_access_diff_data_multi_times<MainCacheWithL2>("l2 diff");
+    exp_access_diff_data_multi_times<MainCacheSharded>("sharded diff");
+    exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheRWLock>>("l2 diff");
+    exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheSharded>>("l2 diff sharded");
     exp_access_diff_data_multi_times<MainCacheSingleLock>("single diff");
 }
 
