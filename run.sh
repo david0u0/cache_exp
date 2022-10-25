@@ -19,4 +19,4 @@ do
 done
 
 cd $OUT
-../../analyze.rb > result
+../../analyze.rb

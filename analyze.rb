@@ -48,10 +48,23 @@ class Line
   end
 end
 
-lines = []
+lines1 = []
+lines2 = []
 `ls *.log`.split do |log|
+  processing_2 = false
   i = 0
   `cat  #{log}`.lines do |l|
+    if !processing_2 && l.include?("diff")
+      processing_2 = true
+      i = 0
+    end
+
+    lines = if processing_2
+             lines2
+           else
+             lines1
+           end
+
     if lines.length <= i
       lines.push(Line.new)
     end
@@ -60,6 +73,14 @@ lines = []
   end
 end
 
-lines.each do |l|
-  puts l.get_msg
+File.open("result_same", 'w') do |file|
+  lines1.each do |l|
+    file.puts l.get_msg
+  end
+end
+
+File.open("result_diff", 'w') do |file|
+  lines2.each do |l|
+    file.puts l.get_msg
+  end
 end
