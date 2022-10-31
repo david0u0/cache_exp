@@ -21,12 +21,14 @@ do
     ./a.out "sharded same" >> $LOG
     ./a.out "l2 same" >> $LOG
     ./a.out "l2 sharded same" >> $LOG
+    ./a.out "l2 local same" >> $LOG
     ./a.out "single same" >> $LOG
 
     ./a.out "rw diff" >> $LOG
     ./a.out "sharded diff" >> $LOG
     ./a.out "l2 diff" >> $LOG
     ./a.out "l2 sharded diff" >> $LOG
+    ./a.out "l2 local diff" >> $LOG
     ./a.out "single diff" >> $LOG
 done
 

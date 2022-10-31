@@ -64,8 +64,13 @@ class MainCacheRWLock {
                     return it->second;
                 }
             }
-            auto v = get_value(key); // may be called multi times?
             unique_lock<shared_mutex> wlock(slock);
+            auto it = map.find(key);
+            if (it != map.end()) {
+                return it->second;
+            }
+
+            auto v = get_value(key);
             auto p = map.insert(make_pair(key, move(v)));
             return p.first->second;
         }
@@ -131,7 +136,7 @@ class L2Cache {
     public:
         void lock() { }
         void unlock() { }
-        L2Cache(MC& c): main_cache(c) {}
+        L2Cache(MC& c): main_cache(c) { }
 
         Value &read(int key) {
             auto it = map.find(key);
@@ -155,18 +160,46 @@ class MainCacheWithL2 {
         }
 };
 
+template <class MC>
+class MainCacheWithThreadLocalL2 {
+    private:
+        MC main_cache;
+    public:
+        void lock() { main_cache.lock(); }
+        void unlock() { main_cache.unlock(); }
+
+        MainCacheWithThreadLocalL2() {}
+
+        Value &read(int key) {
+            thread_local L2Cache<MC> l2(main_cache);
+            return l2.read(key);
+        }
+
+        DummyL2<MainCacheWithThreadLocalL2> get_l2() {
+            return DummyL2(*this);
+        }
+};
+
+constexpr int SIZE = 10000;
+
 template <class T>
-void batch_access(T& l2_cache, int from, int to, int *cost) {
-    microseconds start = duration_cast< microseconds >( system_clock::now().time_since_epoch());
+void batch_access(T& l2_cache, int from, int repeat, vector<int> &cost) {
+    for(int i = 0; i < repeat; i++) {
+        microseconds start = duration_cast< microseconds >( system_clock::now().time_since_epoch());
 
-    l2_cache.lock();
-    for (int i = from; i < to; ++i) {
-        l2_cache.read(i);
+        int real_from = from * (i + 1);
+        int to = real_from + SIZE;
+
+        l2_cache.lock();
+        for (int i = real_from; i < to; ++i) {
+            l2_cache.read(i);
+        }
+        l2_cache.unlock();
+
+        microseconds end = duration_cast< microseconds >( system_clock::now().time_since_epoch());
+        int c = end.count() - start.count();
+        cost.push_back(c);
     }
-    l2_cache.unlock();
-
-    microseconds end = duration_cast< microseconds >( system_clock::now().time_since_epoch());
-    *cost = end.count() - start.count();
 }
 
 void reorder(int* a, int* b) {
@@ -178,20 +211,23 @@ void reorder(int* a, int* b) {
 }
 
 template <class T>
-void multi_thread_access(T &cache1, T &cache2, const string& name, int from1, int to1, int from2, int to2) {
-    int cost1, cost2;
-    thread t1([&]() { batch_access(cache1, from1, to1, &cost1); });
-    thread t2([&]() { batch_access(cache2, from2, to2, &cost2); });
+void multi_thread_access(T &cache1, T &cache2, const string& name, int from1, int from2, int repeat) {
+    vector<int> cost1_v, cost2_v;
+    thread t1([&]() { batch_access(cache1, from1, repeat, cost1_v); });
+    thread t2([&]() { batch_access(cache2, from2, repeat, cost2_v); });
     t1.join();
     t2.join();
-    reorder(&cost1, &cost2);
-    cout << "  ===start " << name << " exp===" << endl;
-    cout << "  thread #1 ends, cost=" << cost1 << endl;
-    cout << "  thread #2 ends, cost=" << cost2 << endl;
-    cout << "  ===end " << name << " exp===" << endl << endl;
+
+    for (int i = 0; i < cost1_v.size(); i++) {
+        int cost1 = cost1_v[i], cost2 = cost2_v[i];
+        reorder(&cost1, &cost2);
+        cout << "  ===start " << name << " exp===" << endl;
+        cout << "  thread #1 ends, cost=" << cost1 << endl;
+        cout << "  thread #2 ends, cost=" << cost2 << endl;
+        cout << "  ===end " << name << " exp===" << endl << endl;
+    }
 }
 
-constexpr int SIZE = 10000;
 constexpr int REPEAT = 3;
 
 template <class T>
@@ -200,10 +236,7 @@ void access_multi_times(const string& name, int from1, int from2, int repeat) {
     auto cache1 = cache.get_l2();
     auto cache2 = cache.get_l2();
     cout << "=======start " << name << " multi times exp=======" << endl;
-    for (int i = 0; i < repeat; i++) {
-        int from2_offset = from2 * (i+1);
-        multi_thread_access(cache1, cache2, name, from1, from1 + SIZE, from2_offset, from2_offset + SIZE);
-    }
+    multi_thread_access(cache1, cache2, name, from1, from2, REPEAT);
     cout << endl;
 }
 
@@ -227,6 +260,8 @@ int main(int argc, char *argv[]) {
         exp_access_same_data_multi_times<MainCacheWithL2<MainCacheRWLock>>(arg);
     } else if (arg == "l2 sharded same") {
         exp_access_same_data_multi_times<MainCacheWithL2<MainCacheSharded>>(arg);
+    } else if (arg == "l2 local same") {
+        exp_access_same_data_multi_times<MainCacheWithThreadLocalL2<MainCacheRWLock>>(arg);
     } else if (arg == "single same") {
         exp_access_same_data_multi_times<MainCacheSingleLock>(arg);
     } else if (arg == "rw diff") {
@@ -237,6 +272,8 @@ int main(int argc, char *argv[]) {
         exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheRWLock>>(arg);
     } else if (arg == "l2 sharded diff") {
         exp_access_diff_data_multi_times<MainCacheWithL2<MainCacheSharded>>(arg);
+    } else if (arg == "l2 local diff") {
+        exp_access_diff_data_multi_times<MainCacheWithThreadLocalL2<MainCacheRWLock>>(arg);
     } else if (arg == "single diff") {
         exp_access_diff_data_multi_times<MainCacheSingleLock>(arg);
     }
